@@ -192,10 +192,34 @@ write_failing_digest_tool() {
 
 write_shasum_compat_wrapper() {
   wrapper_dir=$1
-  sha256sum_path=$(command -v sha256sum) || fail "sha256sum is required for the shasum compatibility fixture"
-  printf '#!/bin/sh\n[ "$#" -eq 4 ] && [ "$1" = -a ] && [ "$2" = 256 ] && [ "$3" = -- ] || exit 2\nexec "%s" -- "$4"\n' "$sha256sum_path" > "$wrapper_dir/shasum"
+  if shasum_path=$(command -v shasum 2>/dev/null); then
+    printf '#!/bin/sh\nexec "%s" "$@"\n' "$shasum_path" > "$wrapper_dir/shasum"
+  elif sha256sum_path=$(command -v sha256sum 2>/dev/null); then
+    printf '#!/bin/sh\n[ "$#" -eq 4 ] && [ "$1" = -a ] && [ "$2" = 256 ] && [ "$3" = -- ] || exit 2\nexec "%s" -- "$4"\n' "$sha256sum_path" > "$wrapper_dir/shasum"
+  else
+    fail "shasum or sha256sum is required for the shasum compatibility fixture"
+  fi
   chmod +x "$wrapper_dir/shasum"
 }
+
+macos_source_bin=$tmp_dir/macos-shasum-source-bin
+mkdir -p "$macos_source_bin"
+write_shasum_compat_wrapper "$macos_source_bin"
+write_tool_wrapper "$macos_source_bin" chmod
+macos_fixture_bin=$tmp_dir/macos-shasum-fixture-bin
+write_installer_tool_path "$macos_fixture_bin"
+[ -n "$(PATH="$macos_source_bin:$macos_fixture_bin" command -v shasum 2>/dev/null)" ] || fail "macOS-equivalent fixture does not expose shasum"
+[ -z "$(PATH="$macos_source_bin:$macos_fixture_bin" command -v sha256sum 2>/dev/null)" ] || fail "macOS-equivalent fixture unexpectedly exposes sha256sum"
+PATH="$macos_source_bin:$macos_fixture_bin" write_shasum_compat_wrapper "$macos_fixture_bin"
+macos_target=$tmp_dir/macos-shasum-only-target
+write_v050_roles "$macos_target"
+cp "$templates/$luna_file" "$macos_target/$luna_file"
+shell_path=$(command -v sh) || fail "sh is unavailable"
+PATH="$macos_fixture_bin" "$shell_path" "$installer" --target-dir "$macos_target"
+cmp -s "$templates/$terra_file" "$macos_target/$terra_file" || fail "shasum-only installer did not migrate Terra"
+cmp -s "$templates/$luna_file" "$macos_target/$luna_file" || fail "shasum-only installer changed Luna"
+cmp -s "$templates/$sol_file" "$macos_target/$sol_file" || fail "shasum-only installer changed Sol"
+pass "macOS-equivalent shasum-only fixture and installer behavior"
 
 fallback_bin=$tmp_dir/fallback-bin
 write_installer_tool_path "$fallback_bin"
@@ -209,7 +233,6 @@ printf '%s\n' 'unrelated fixture' > "$fallback_target/unrelated-agent.toml"
 fallback_luna_before=$(test_sha256_file "$fallback_target/$luna_file")
 fallback_sol_before=$(test_sha256_file "$fallback_target/$sol_file")
 fallback_unrelated_before=$(test_sha256_file "$fallback_target/unrelated-agent.toml")
-shell_path=$(command -v sh) || fail "sh is unavailable"
 PATH="$fallback_bin" "$shell_path" "$installer" --target-dir "$fallback_target"
 cmp -s "$templates/$terra_file" "$fallback_target/$terra_file" || fail "sha256sum fallback did not migrate Unicode-path Terra"
 [ "$(test_sha256_file "$fallback_target/$luna_file")" = "$fallback_luna_before" ] || fail "Unicode-path fallback changed Luna"
