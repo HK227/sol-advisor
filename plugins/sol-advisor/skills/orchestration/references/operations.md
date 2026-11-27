@@ -179,6 +179,11 @@ work; it does not duplicate it. A reviewer never fixes its own findings.
 
 ## Maintainer verification
 
+ローカルでCIと同じ検証を実行するには、POSIX環境（WindowsではWSL）で
+`git`、`jq`、`python3`（3.11以降）、`shasum`、`rg` を利用できる状態にしてください。
+`verify.sh` は一時ディレクトリ内のテスト用ファイルを使い、利用中のCodex環境に
+ロールをインストールしません。成功時は最後に `VERIFY PASSED` と表示されます。
+
 From the repository root, run:
 
 ~~~sh
