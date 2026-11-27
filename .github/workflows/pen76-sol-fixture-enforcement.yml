@@ -1,0 +1,25 @@
+name: PEN-76 sol-advisor isolated fixture
+
+'on':
+  pull_request:
+    branches: [pen76-sol-gate-trial-target]
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft, labeled, unlabeled]
+
+permissions: {}
+
+jobs:
+  pen76-sol-fixture-enforcement:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Evaluate isolated fixture
+        shell: pwsh
+        env:
+          EXACT_SCOPE: ${{ github.repository_id == 1357615656 && github.event.pull_request.head.repo.id == 1357615656 && github.head_ref == 'pen76-sol-gate-trial-fixture' && github.base_ref == 'pen76-sol-gate-trial-target' }}
+          READY_AND_LABELED: ${{ github.event.pull_request.draft == false && contains(github.event.pull_request.labels.*.name, 'pen76-sol-fixture-allow') }}
+        run: |
+          if ($env:EXACT_SCOPE -cne 'true' -or $env:READY_AND_LABELED -cne 'true') {
+              Write-Output 'PEN76_SOL_FIXTURE=HOLD'
+              exit 1
+          }
+          Write-Output 'PEN76_SOL_FIXTURE=PASS'
